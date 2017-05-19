@@ -1,0 +1,184 @@
+---
+title: A Quick and Dirty Introduction to Supervised Machine Learning in R
+author: Kirkwood Donavin
+date: 18th of May, 2017
+output: ioslides_presentation
+---
+
+```{r, echo = FALSE, message = FALSE}
+library(Hmisc)
+library(ggplot2)
+library(class)
+library(ggthemes)
+```
+
+##What is Supervised Machine Learning?
+
+**Machine Learning:** The construction & use of algorithms that learn from data
+
+**Supervised:** Learning from data that have pre-assigned "labels"
+
+##Classification of Iris Species {.vcenter}
+
+<img src = 'images/iris_types.jpg', width = 700>
+
+##Sepal Length & Width
+
+<center>
+```{r, echo = FALSE, message = FALSE}
+ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width, col = Species))+
+    geom_jitter() +
+    theme_economist_white()
+```
+</center>
+
+##Petal Length & Width
+
+<center>
+```{r, echo = FALSE, message = FALSE}
+ggplot(iris, aes(x = Petal.Length, y = Petal.Width, col = Species))+
+    geom_jitter() +
+    theme_economist_white()
+```
+</center>
+
+##Classification & Some Vocabulary
+
+**The Classification Problem** - To classify a new observation based old observations. Importantly, classifications are *qualitative*.
+
+**Machine Learning Vocabulary**
+
+* **Features** - The information used by the algorithm to make classifications (e.g. sepal width, petal height)
+* **Labels** - What is to be classified (e.g., species of iris: setosa, versicolor, virginica)
+* **Observations** - Individual instances of features and labels (if they exist) (e.g., a single iris)
+
+##k Nearest Neighbors
+
+Using *k* most similar observations in a training set, classify a new observation. The measure of "similarity" must be specified (e.g., Euclidean distance metric).
+
+You'll need:
+
+* **Training Set**: A data set with a set of *features* and *labels*
+* **New Observations**: One or more observations with the *same* features, but *no labels*.
+
+----
+
+<img src = 'images/knn_example.png', height = "475", width = "750">
+
+##*k*NN Algorithm
+
+Given a training set and a *new* observation. 
+
+1. Calculate the "distance" between all training observations's features and the new observation's features
+2. Select *k* training observations with the smallest "distance" to your new observation's features.
+3. Aggregate the response of the *k* nearest neighbors. The aggregate is the prediction for the new observation.
+
+##Test Data
+
+**Question**: How can we evaluate the *k*NN algorithm's ability to classifications? 
+
+**Answer**: Test datasets, a random subset of the training data
+
+```{r}
+smp <- sample(nrow(iris), 0.25*nrow(iris))
+trn <- iris[-smp,]
+tst <- iris[smp,]
+print(smp)
+``` 
+
+##*k*NN in R with the `class` package
+
+```{r}
+library(Hmisc, class)
+features <- names(iris) %nin% c("Species")
+label <- "Species"
+prediction <- knn(train = trn[, features], test = tst[, features], 
+    cl = trn[, label], k = 3)
+print(prediction)
+```
+
+##kNN Algorithm Accuracy
+
+***k*NN Algorithm Accuracy**: <sup>Correctly Classified</sup> &frasl; <sub> Number Classified </sub>
+
+```{r}
+N_test = nrow(tst)
+sum(prediction == tst[,label])/N_test
+```
+
+##Cross-Validation
+
+Evaluation of model performance *n* times with distinct test and training datasets, where the test set is <sup>1</sup>&frasl;<sub>n</sub>.
+
+```{r}
+set.seed(1111)
+N = nrow(iris)
+random <- sample(N,N) #randomized rows
+smp1 <- random[1:(0.25*N)]
+smp2 <- random[(0.25*N+1):(0.5*N)]
+smp3 <- random[(0.5*N+1):(0.75*N)]
+smp4 <- random[(0.75*N+1):N]
+print(smp1)
+```
+
+##Exercise
+
+1. Using 4-fold cross-validation, create 4 random test datasets
+2. Iteratively test the classification accuracy for all possible *k* nearest neighbors
+3. Store the results in a *k* by 4 matrix
+4. Which value for *k* has the highest classification accuracy?
+
+
+```{r, echo = FALSE}
+#Cross-validations ----
+set.seed(1111)
+N = nrow(iris)
+random <- sample(N,N) #randomizes rows
+smp1 <- random[1:(0.25*N)]
+smp2 <- random[(0.25*N+1):(0.5*N)]
+smp3 <- random[(0.5*N+1):(0.75*N)]
+smp4 <- random[(0.75*N+1):N]
+samples <- list(smp1, smp2, smp3, smp4)
+
+features <- names(iris) %nin% c("Species")
+label <- "Species"
+N_train = N*(1 - 1/length(samples)) + 1 #Calculation: number of rows in training sets (see below)
+performance <- matrix(nrow = N_train, ncol = length(samples))
+
+for(i in 1:length(samples)){
+    s = samples[[i]]
+    trn <- iris[-s, features]
+    lbls <- iris[-s, label]
+    tst <- iris[s, features]
+    for(k in 1:nrow(trn)){
+        pred <- knn(train = trn, test = tst, cl = lbls, k = k)
+        performance[k,i] = sum(pred == iris[s, "Species"])/nrow(tst)
+    }
+}
+performance <- data.frame(performance, 
+    row.names = paste("k = ",1:N_train,sep = ""))
+names(performance) <- paste("Test ", 1:4, sep = "")
+performance$Average <- rowMeans(performance)
+for(c in 1:(length(performance) - 1)){ #subtract a column for 'Average'
+    performance$Average <- performance$Average + performance[,c]
+}
+performance$Average <- performance$Average/length(performance)
+```
+
+##kNN Performance
+
+```{r, echo=FALSE}
+performance$kNN <- c(1:nrow(performance))
+ggplot(data = performance, aes(x = kNN, y = Average) ) +
+    geom_point() +       
+    geom_path() + 
+    theme_economist_white() +
+    scale_x_continuous(breaks = seq(0,N_train,10)) + 
+    ylab("Accuracy")
+```
+
+##Conclusion
+
+If you interested in learning more, please check out DataCamp.com's Introduction to Machine Learning
+
+<img src = "images/datacamp.png", alt = "DataCamp", width = "300"> <img src = "images/machine_learning_r.png", alt = "Introduction to Machine Learning", width = "300">
